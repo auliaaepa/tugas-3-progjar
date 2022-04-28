@@ -1,6 +1,5 @@
 import socket
 import re, time
-import os 
 
 BUFFER_SIZE = 4096
 SEPARATOR = "\r\n"
@@ -12,13 +11,6 @@ PASSWORD = "aulia123"
 # connect to ftp server
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client_socket.connect((HOST, PORT))
-
-# define command list
-dir = "/test2"
-commands = ["USER " + USERNAME + SEPARATOR, 
-    "PASS " + PASSWORD + SEPARATOR, 
-    "RMD " + dir + SEPARATOR, 
-    "QUIT" + SEPARATOR]
 
 def create_data_socket():
     # send PASV command
@@ -58,9 +50,9 @@ def listdir(path):
     # collect file and dir name
     dirs, files = [], []
     for i in range(len(data_list)):
-        if data_list[i] != "":
-            result = data_list[i].split("; ")
-            ftype, name = result[0].split(";")[0][5:], result[1]
+        result = re.search(r"type=([a-zA-Z]*);.*; (.*)", data_list[i])
+        if result:
+            ftype, name = result.group(1), result.group(2)
             if ftype == "dir":
                 dirs.append(name)
             elif ftype == "file":
@@ -83,43 +75,54 @@ def walk(path):
         client_socket.send("CWD ..{}".format(SEPARATOR).encode())
         time.sleep(1) 
         message = client_socket.recv(BUFFER_SIZE).strip().decode()
+
+def main():
+    # define command list
+    dir = "/test2"
+    commands = ["USER " + USERNAME + SEPARATOR, 
+        "PASS " + PASSWORD + SEPARATOR, 
+        "RMD " + dir + SEPARATOR, 
+        "QUIT" + SEPARATOR]
     
-for i in range(len(commands)+1):
-    try:
-        # receive message
-        message = client_socket.recv(BUFFER_SIZE).strip().decode()
-        print(message)
+    for i in range(len(commands)+1):
+        try:
+            # receive message
+            message = client_socket.recv(BUFFER_SIZE).strip().decode()
+            print(message)
 
-        # send command
-        if i < len(commands):
-            if "RMD" in commands[i]:
-                dirpaths, filepaths = [], []
-                for root, dirs, files in walk(dir):
-                    for dir in dirs:
-                        dirpaths.append(root + "/" + dir)
-                    for file in files:
-                        filepaths.append(root + "/" + file)
-                for filepath in filepaths[::-1]:
-                    # send DELE command and receive message
-                    client_socket.send("DELE {}{}".format(filepath, SEPARATOR).encode())
-                    time.sleep(1) 
-                    message = client_socket.recv(BUFFER_SIZE).strip().decode()
-                    # print(message)
-                for dirpath in dirpaths[::-1]:
-                    # send RMD command and receive message
-                    client_socket.send("RMD {}{}".format(dirpath, SEPARATOR).encode())
-                    time.sleep(1) 
-                    message = client_socket.recv(BUFFER_SIZE).strip().decode()
-                    # print(message)
-            
-            client_socket.send(commands[i].encode()) 
-            # print("\n>> " + commands[i].strip()) 
+            # send command
+            if i < len(commands):
+                if "RMD" in commands[i]:
+                    dirpaths, filepaths = [], []
+                    for root, dirs, files in walk(dir):
+                        for dir in dirs:
+                            dirpaths.append(root + "/" + dir)
+                        for file in files:
+                            filepaths.append(root + "/" + file)
+                    for filepath in filepaths[::-1]:
+                        # send DELE command and receive message
+                        client_socket.send("DELE {}{}".format(filepath, SEPARATOR).encode())
+                        time.sleep(1) 
+                        message = client_socket.recv(BUFFER_SIZE).strip().decode()
+                        # print(message)
+                    for dirpath in dirpaths[::-1]:
+                        # send RMD command and receive message
+                        client_socket.send("RMD {}{}".format(dirpath, SEPARATOR).encode())
+                        time.sleep(1) 
+                        message = client_socket.recv(BUFFER_SIZE).strip().decode()
+                        # print(message)
+                
+                client_socket.send(commands[i].encode()) 
+                # print("\n>> " + commands[i].strip()) 
 
-        # wait until process done
-        time.sleep(1) 
-    
-    except socket.error:
-        print("SOCKET ERROR")
-        break
+            # wait until process done
+            time.sleep(1) 
+        
+        except socket.error:
+            print("SOCKET ERROR")
+            break
 
-client_socket.close()
+    client_socket.close()
+
+if __name__ == "__main__":
+    main()
